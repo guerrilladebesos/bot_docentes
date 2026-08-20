@@ -11,6 +11,12 @@ import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
+if not TELEGRAM_TOKEN:
+    raise ValueError("Falta la variable TELEGRAM_TOKEN")
+
+if not MISTRAL_API_KEY:
+    raise ValueError("Falta la variable MISTRAL_API_KEY")
+
 
 # 📚 Cargar base de permisos
 with open("permisos_cantabria_pro.json", "r", encoding="utf-8") as f:
