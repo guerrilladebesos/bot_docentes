@@ -128,5 +128,5 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-print("Bot funcionando con Mistral (sin librerías problemáticas)...")
+print("INICIALIZANDO")
 app.run_polling()
