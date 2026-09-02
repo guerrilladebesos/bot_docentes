@@ -6,16 +6,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 
 # 🔑 CLAVES
 
-import os
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-
-if not TELEGRAM_TOKEN:
-    raise ValueError("Falta la variable TELEGRAM_TOKEN")
-
-if not MISTRAL_API_KEY:
-    raise ValueError("Falta la variable MISTRAL_API_KEY")
+from config import TELEGRAM_TOKEN, MISTRAL_API_KEY
 
 
 # 📚 Cargar base de permisos

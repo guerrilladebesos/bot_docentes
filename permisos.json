@@ -1,0 +1,26 @@
+[
+  {
+    "id": "permiso_enfermedad_familiar",
+    "titulo": "Permiso por enfermedad o hospitalización de familiar",
+    "resumen": "Permiso retribuido por enfermedad grave, hospitalización o intervención quirúrgica.",
+    "contenido": "Para familiares de primer grado: 3 días hábiles (5 con desplazamiento). Segundo grado: 2 días (4 con desplazamiento).",
+    "normativa": "Art. 48 EBEP + normativa Cantabria",
+    "keywords": ["hospitalizacion", "enfermedad", "familiar"]
+  },
+  {
+    "id": "permiso_asuntos_propios",
+    "titulo": "Permiso por asuntos particulares",
+    "resumen": "Días de libre disposición sin justificación.",
+    "contenido": "Hasta 6 días al año, condicionados a necesidades del servicio.",
+    "normativa": "Art. 48 EBEP",
+    "keywords": ["asuntos propios", "dias libres"]
+  },
+  {
+    "id": "permiso_mudanza",
+    "titulo": "Permiso por traslado de domicilio",
+    "resumen": "Permiso por cambio de residencia habitual.",
+    "contenido": "1 día de permiso retribuido.",
+    "normativa": "Art. 48 EBEP",
+    "keywords": ["mudanza", "domicilio"]
+  }
+]

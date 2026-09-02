@@ -1,0 +1,18 @@
+telegram key
+
+8715967826:AAEk4Vy4ZzzI1gVuL-V-ElrkUITDd2fGYSQ
+
+
+
+
+open ai key
+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
+
+
+
+mistral Key 
+pJKJSbWPzCdfm6QMPGDIv6ED2VPOd3ST
+
+cd bot_docentes
+
+python bot.py
