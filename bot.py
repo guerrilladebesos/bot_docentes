@@ -1,132 +1,146 @@
-import json
-import PyPDF2
-import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
 
-# 🔑 CLAVES
+from config import TELEGRAM_TOKEN
+from buscador import buscar
+from ia import consultar_ia
 
-from config import TELEGRAM_TOKEN, MISTRAL_API_KEY
 
+# ==========================================================
+# MENSAJE DE AYUDA
+# ==========================================================
 
-# 📚 Cargar base de permisos
-with open("permisos_cantabria_pro.json", "r", encoding="utf-8") as f:
-    permisos = json.load(f)
+MENSAJE_AYUDA = """
+👋 Hola.
 
-# 🔍 Buscar en JSON
-def buscar_respuesta_avanzada(pregunta):
-    pregunta = pregunta.lower()
+Soy el asistente jurídico para el profesorado de Cantabria.
 
-    mejor = None
-    max_score = 0
+Puedes preguntarme sobre:
 
-    for permiso in permisos:
-        score = 0
+• Permisos y licencias
+• Reducciones de jornada
+• Vacaciones
+• Profesorado interino
+• Oposiciones
+• Retribuciones
+• Normativa educativa
+• Procedimientos administrativos
 
-        # Coincidencias por palabras clave
-        for palabra in permiso.get("palabras_clave", []):
-            if palabra in pregunta:
-                score += 2
+Escribe tu consulta con lenguaje natural.
 
-        # Coincidencias por título
-        if permiso["titulo"].lower() in pregunta:
-            score += 3
+Ejemplos:
 
-        if score > max_score:
-            max_score = score
-            mejor = permiso
+• ¿Cuántos días me corresponden por fallecimiento de mi padre?
 
-    return mejor
+• Soy interino. ¿Puedo pedir excedencia?
 
-# 📄 Leer PDF
-def leer_pdf():
-    texto = ""
-    with open("permisos_cantabria.pdf", "rb") as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            contenido = page.extract_text()
-            if contenido:
-                texto += contenido + "\n"
-    return texto
-
-texto_pdf = leer_pdf()
-
-# 🔎 Buscar en PDF
-def buscar_en_pdf(pregunta):
-    pregunta = pregunta.lower()
-    texto = texto_pdf.lower()
-
-    for palabra in pregunta.split():
-        if palabra in texto:
-            indice = texto.find(palabra)
-            inicio = max(0, indice - 200)
-            fin = indice + 500
-            return texto_pdf[inicio:fin]
-
-    return None
-
-# 🤖 LLAMADA A MISTRAL (SIN LIBRERÍA)
-def consultar_mistral(pregunta, contexto):
-    url = "https://api.mistral.ai/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {MISTRAL_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "mistral-small-latest",
-        "messages": [
-            {
-                "role": "system",
-                "content": "Eres experta en normativa docente de Cantabria. Responde con precisión jurídica y base legal."
-            },
-            {
-                "role": "user",
-                "content": f"Pregunta: {pregunta}\n\nTexto legal:\n{contexto}"
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
-    else:
-        return f"Error en Mistral: {response.text}"
-
-# 🤖 FUNCIÓN PRINCIPAL
-async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pregunta = update.message.text
-
-    resultado = buscar_respuesta_avanzada(pregunta)
-
-    if resultado:
-        respuesta = f"""
-📌 {resultado['titulo']}
-
-🧾 Descripción:
-{resultado['descripcion']}
-
-⏱️ Duración:
-{resultado.get('duracion', 'No especificada')}
-
-⚖️ Base legal:
-{resultado['normativa']}
+• ¿Qué documentación necesito para una reducción de jornada?
 """
+
+
+# ==========================================================
+# RESPONDER
+# ==========================================================
+
+async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    pregunta = update.message.text.strip()
+
+    if not pregunta:
+        return
+
+    print("=" * 70)
+    print("Pregunta:", pregunta)
+
+    # ------------------------------------------------------
+    # Buscar fragmentos
+    # ------------------------------------------------------
+
+    resultados = buscar(pregunta)
+
+    if not resultados:
+
+        await update.message.reply_text(
+            "No he encontrado información en la base documental."
+        )
+
+        return
+
+    print(f"Fragmentos encontrados: {len(resultados)}")
+
+    # ------------------------------------------------------
+    # Consultar IA
+    # ------------------------------------------------------
+
+    try:
+
+        respuesta = consultar_ia(
+            pregunta,
+            resultados
+        )
+
+    except Exception as e:
+
+        respuesta = f"Error consultando la IA:\n\n{e}"
+
+    # ------------------------------------------------------
+    # Telegram tiene un límite de 4096 caracteres
+    # ------------------------------------------------------
+
+    LIMITE = 4000
+
+    if len(respuesta) <= LIMITE:
+
+        await update.message.reply_text(respuesta)
+
     else:
-        contexto_pdf = buscar_en_pdf(pregunta)
 
-        if contexto_pdf:
-            respuesta = consultar_mistral(pregunta, contexto_pdf)
-        else:
-            respuesta = "No he encontrado información en la normativa."
+        for i in range(0, len(respuesta), LIMITE):
 
-    await update.message.reply_text(respuesta)
+            await update.message.reply_text(
+                respuesta[i:i + LIMITE]
+            )
 
-# 🚀 ARRANQUE
+
+# ==========================================================
+# COMANDO /start
+# ==========================================================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(MENSAJE_AYUDA)
+
+
+# ==========================================================
+# ARRANQUE
+# ==========================================================
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-print("INICIALIZANDO")
-app.run_polling()
+app.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        responder
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.COMMAND,
+        start
+    )
+)
+
+print()
+print("=" * 70)
+print("ASISTENTE JURÍDICO DOCENTE")
+print("=" * 70)
+print("Bot iniciado correctamente.")
+print()
+
+app.run_polling(drop_pending_updates=True)

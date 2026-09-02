@@ -1,0 +1,158 @@
+{
+  "version": "1.0",
+  "ultima_actualizacion": "",
+  "comunidad_autonoma": "Cantabria",
+
+  "categorias": {
+
+    "permisos": {
+      "nombre": "Permisos, licencias y vacaciones",
+      "prioridad": 1,
+      "ruta": "conocimiento/permisos/",
+      "tipo": "normativa",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "interinos": {
+      "nombre": "Profesorado interino",
+      "prioridad": 2,
+      "ruta": "conocimiento/interinos/",
+      "tipo": "normativa",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "oposiciones": {
+      "nombre": "Procesos selectivos",
+      "prioridad": 3,
+      "ruta": "conocimiento/oposiciones/",
+      "tipo": "normativa",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "concursos": {
+      "nombre": "Concursos de traslados",
+      "prioridad": 4,
+      "ruta": "conocimiento/concursos/",
+      "tipo": "normativa",
+      "administracion": "Ministerio y Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "retribuciones": {
+      "nombre": "Retribuciones",
+      "prioridad": 5,
+      "ruta": "conocimiento/retribuciones/",
+      "tipo": "economico",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "licencias": {
+      "nombre": "Licencias",
+      "prioridad": 6,
+      "ruta": "conocimiento/licencias/",
+      "tipo": "normativa",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "calendario": {
+      "nombre": "Calendario escolar",
+      "prioridad": 7,
+      "ruta": "conocimiento/calendario/",
+      "tipo": "calendario",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "centros": {
+      "nombre": "Centros educativos",
+      "prioridad": 8,
+      "ruta": "conocimiento/centros/",
+      "tipo": "directorio",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "contactos": {
+      "nombre": "Contactos oficiales",
+      "prioridad": 9,
+      "ruta": "conocimiento/contactos/",
+      "tipo": "directorio",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "procedimientos": {
+      "nombre": "Procedimientos administrativos",
+      "prioridad": 10,
+      "ruta": "conocimiento/procedimientos/",
+      "tipo": "procedimiento",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "faq": {
+      "nombre": "Preguntas frecuentes",
+      "prioridad": 11,
+      "ruta": "conocimiento/faq/",
+      "tipo": "faq",
+      "administracion": "Bot",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "normativa_estatal": {
+      "nombre": "Normativa estatal",
+      "prioridad": 12,
+      "ruta": "conocimiento/normativa_estatal/",
+      "tipo": "legislacion",
+      "administracion": "Estado",
+      "buscar_en": true,
+      "documentos": []
+    },
+
+    "inspeccion": {
+      "nombre": "Inspección Educativa",
+      "prioridad": 13,
+      "ruta": "conocimiento/inspeccion/",
+      "tipo": "procedimiento",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    }
+
+   "legislación_general": {
+      "nombre": "Legislacion General",
+      "prioridad": 14,
+      "ruta": "conocimiento/legislación_general/",
+      "tipo": "legislacion",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    }
+
+   "pedagogia": {
+      "nombre": "Pedagogia",
+      "prioridad": 15,
+      "ruta": "conocimiento/pedagogia/",
+      "tipo": "pedagogia",
+      "administracion": "Gobierno de Cantabria",
+      "buscar_en": true,
+      "documentos": []
+    }
+  }
+}

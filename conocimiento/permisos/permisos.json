@@ -1,0 +1,146 @@
+[
+  {
+    "id": "permiso_fallecimiento",
+    "titulo": "Permiso por fallecimiento de familiar",
+    "descripcion": "Permiso retribuido por fallecimiento de familiar hasta segundo grado de consanguinidad o afinidad.",
+    "duracion": {
+      "primer_grado": "3 días hábiles (5 si hay desplazamiento)",
+      "segundo_grado": "2 días hábiles (4 si hay desplazamiento)"
+    },
+    "condiciones": [
+      "Inicio desde el hecho causante",
+      "Debe justificarse documentalmente",
+      "Incluye consanguinidad y afinidad"
+    ],
+    "normativa": "Acuerdo 16 mayo 2019 Cantabria + EBEP art. 48",
+    "palabras_clave": ["fallecimiento", "muerte", "luto", "defuncion"]
+  },
+  {
+    "id": "permiso_enfermedad_hospitalizacion",
+    "titulo": "Permiso por enfermedad grave, hospitalización o intervención quirúrgica",
+    "descripcion": "Permiso retribuido por enfermedad grave, hospitalización o intervención quirúrgica sin hospitalización que requiera reposo domiciliario.",
+    "duracion": {
+      "primer_grado": "3 días hábiles (5 con desplazamiento)",
+      "segundo_grado": "2 días hábiles (4 con desplazamiento)"
+    },
+    "condiciones": [
+      "Debe existir justificante médico",
+      "Se requiere acreditar parentesco",
+      "Aplicable a intervención sin ingreso si hay reposo"
+    ],
+    "normativa": "Acuerdo 2019 Cantabria + EBEP art. 48",
+    "palabras_clave": ["hospitalizacion", "enfermedad", "operacion", "reposo"]
+  },
+  {
+    "id": "permiso_mudanza",
+    "titulo": "Permiso por traslado de domicilio habitual",
+    "descripcion": "Permiso retribuido por cambio de residencia habitual.",
+    "duracion": {
+      "general": "1 día"
+    },
+    "condiciones": [
+      "Debe acreditarse el traslado de domicilio"
+    ],
+    "normativa": "EBEP art. 48.b",
+    "palabras_clave": ["mudanza", "domicilio", "traslado"]
+  },
+  {
+    "id": "permiso_deber_inexcusable",
+    "titulo": "Permiso por deber inexcusable de carácter público o personal",
+    "descripcion": "Permiso por cumplimiento de obligaciones legales ineludibles.",
+    "duracion": {
+      "general": "Por el tiempo indispensable"
+    },
+    "condiciones": [
+      "Debe justificarse documentalmente",
+      "Incluye asistencia a juicio, mesas electorales"
+    ],
+    "normativa": "EBEP art. 48.j",
+    "palabras_clave": ["juicio", "mesa electoral", "obligacion legal"]
+  },
+  {
+    "id": "permiso_asuntos_propios",
+    "titulo": "Permiso por asuntos particulares",
+    "descripcion": "Días de permiso retribuido sin necesidad de justificación.",
+    "duracion": {
+      "general": "Hasta 6 días anuales"
+    },
+    "condiciones": [
+      "Sujeto a necesidades del servicio",
+      "Requiere autorización previa"
+    ],
+    "normativa": "EBEP art. 48.k + normativa Cantabria",
+    "palabras_clave": ["asuntos propios", "dias libres"]
+  },
+  {
+    "id": "permiso_lactancia",
+    "titulo": "Permiso por lactancia",
+    "descripcion": "Derecho a ausencia o reducción de jornada por cuidado de hijo menor de 12 meses.",
+    "duracion": {
+      "general": "1 hora diaria o acumulación en jornadas completas"
+    },
+    "condiciones": [
+      "Puede dividirse en dos fracciones",
+      "Compatible con reducción de jornada",
+      "Acumulable según normativa"
+    ],
+    "normativa": "Acuerdo Cantabria 2019 + EBEP",
+    "palabras_clave": ["lactancia", "bebe", "hijo"]
+  },
+  {
+    "id": "permiso_maternidad",
+    "titulo": "Permiso por nacimiento, adopción o acogimiento",
+    "descripcion": "Permiso por nacimiento, adopción o acogimiento con duración establecida legalmente.",
+    "duracion": {
+      "general": "16 semanas"
+    },
+    "condiciones": [
+      "Ampliable en casos de discapacidad o parto múltiple",
+      "Disfrute obligatorio parcial tras el parto"
+    ],
+    "normativa": "EBEP + legislación estatal",
+    "palabras_clave": ["maternidad", "nacimiento", "adopcion"]
+  },
+  {
+    "id": "permiso_paternidad",
+    "titulo": "Permiso del progenitor distinto de la madre biológica",
+    "descripcion": "Permiso por nacimiento o adopción equivalente al de maternidad.",
+    "duracion": {
+      "general": "16 semanas"
+    },
+    "condiciones": [
+      "Disfrute ininterrumpido o por semanas",
+      "Igualdad progresiva con maternidad"
+    ],
+    "normativa": "EBEP actualizado",
+    "palabras_clave": ["paternidad", "padre"]
+  },
+  {
+    "id": "permiso_examenes",
+    "titulo": "Permiso para concurrir a exámenes",
+    "descripcion": "Permiso para asistir a pruebas selectivas o exámenes oficiales.",
+    "duracion": {
+      "general": "Tiempo indispensable"
+    },
+    "condiciones": [
+      "Debe justificarse asistencia",
+      "Incluye oposiciones"
+    ],
+    "normativa": "EBEP",
+    "palabras_clave": ["examen", "oposicion"]
+  },
+  {
+    "id": "reduccion_jornada",
+    "titulo": "Reducción de jornada por guarda legal",
+    "descripcion": "Derecho a reducción de jornada por cuidado de menor o familiar.",
+    "duracion": {
+      "general": "Reducción proporcional de jornada"
+    },
+    "condiciones": [
+      "Implica reducción proporcional de retribuciones",
+      "Aplicable a menores y dependientes"
+    ],
+    "normativa": "EBEP + normativa autonómica",
+    "palabras_clave": ["reduccion jornada", "cuidado", "hijo"]
+  }
+]
