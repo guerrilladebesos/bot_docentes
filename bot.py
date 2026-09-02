@@ -1,6 +1,5 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
-
 from config import TELEGRAM_TOKEN
 from buscador import buscar
 from ia import consultar_ia
