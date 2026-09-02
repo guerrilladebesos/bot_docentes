@@ -148,3 +148,47 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update,
         respuesta
     )
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    await update.message.reply_text(MENSAJE_AYUDA)
+
+
+def main():
+
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_TOKEN)
+        .build()
+    )
+
+    # Comando /start
+    app.add_handler(
+        CommandHandler(
+            "start",
+            start
+        )
+    )
+
+    # Preguntas de los usuarios
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            responder
+        )
+    )
+
+    print("=" * 70)
+    print("ASISTENTE JURÍDICO DOCENTE")
+    print("=" * 70)
+    print("Bot iniciado correctamente")
+
+    app.run_polling(
+        drop_pending_updates=True
+    )
+
+
+if __name__ == "__main__":
+    main()
