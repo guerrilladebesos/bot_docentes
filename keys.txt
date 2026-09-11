@@ -10,15 +10,16 @@ sk-proj-C6Lw8dsyWxpjnGMBz5SjQ2RezjkaBOnT3rq7Lb25K7R87bS8N3DDpye3aZDBVLyHUEVqW3JS
 
 
 
-mistral Key 
-pJKJSbWPzCdfm6QMPGDIv6ED2VPOd3ST
+api mistral 1
+
+tyS5z8KM3rmXiyvWUnzOtrXsiQMQGTNf
 
 
 
 mistral key 2
 
 
-k7UuErn2fVl4nLUkLkwA1Hg5NMABRjOs
+
 
 
 serpapi
