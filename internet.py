@@ -1,139 +1,70 @@
 import os
-from urllib.parse import urlparse
-from serpapi import GoogleSearch
+import requests
 
-# ===========================================
-# CONFIGURACIÓN
-# ===========================================
+from config import SERP_API_KEY
 
-SERP_API_KEY = os.getenv("SERP_API_KEY")
+SERP_URL = "https://serpapi.com/search.json"
+DOMINIO = "educantabria.es"
 
-DOMINIOS_OFICIALES = {
-    "educantabria.es": 100,
-    
-}
-
-
-# ===========================================
-# CONSULTA
-# ===========================================
-
-def construir_consulta(pregunta: str) -> str:
-    return (
-        f"{pregunta} "
-        "docente Cantabria "
-        "(site:educantabria.es OR "
-        "site:boc.cantabria.es OR "
-        "site:boe.es)"
-    )
-
-
-# ===========================================
-# DOMINIO
-# ===========================================
-
-def dominio(url: str) -> str:
-
-    try:
-        return urlparse(url).netloc.replace("www.", "")
-    except:
-        return ""
-
-
-# ===========================================
-# SCORE
-# ===========================================
-
-def score(dominio_web):
-
-    if dominio_web in DOMINIOS_OFICIALES:
-        return DOMINIOS_OFICIALES[dominio_web]
-
-    return 10
-
-
-# ===========================================
-# BUSCADOR
-# ===========================================
 
 def buscar_web(pregunta, max_resultados=2):
+    """
+    Busca información adicional en Internet utilizando exclusivamente
+    el dominio oficial educantabria.es.
 
+    Devuelve como máximo 2 resultados.
+    """
     if not SERP_API_KEY:
         return []
 
-    consulta = construir_consulta(pregunta)
-
-    parametros = {
-        "engine": "google",
-        "q": consulta,
-        "hl": "es",
-        "gl": "es",
-        "num": 10,
-        "api_key": SERP_API_KEY,
-    }
-
     try:
-        busqueda = GoogleSearch(parametros)
-        resultados = busqueda.get_dict()
-    except Exception as e:
-        print(f"Error SerpAPI: {e}")
+        # Restringimos explícitamente la búsqueda al dominio de Educantabria.
+        consulta = f"{pregunta} site:{DOMINIO}"
+
+        params = {
+            "engine": "google",
+            "q": consulta,
+            "api_key": SERP_API_KEY,
+            "num": max_resultados,
+            "hl": "es",
+            "gl": "es",
+        }
+
+        respuesta = requests.get(
+            SERP_URL,
+            params=params,
+            timeout=15
+        )
+
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+
+        resultados = []
+
+        for resultado in datos.get("organic_results", []):
+            enlace = resultado.get("link")
+            titulo = resultado.get("title")
+
+            if not enlace or not titulo:
+                continue
+
+            # Comprobación adicional de seguridad:
+            # solo aceptamos URLs pertenecientes a educantabria.es.
+            if "educantabria.es" not in enlace.lower():
+                continue
+
+            resultados.append({
+                "titulo": titulo,
+                "url": enlace,
+                "descripcion": resultado.get("snippet", "")
+            })
+
+            if len(resultados) >= max_resultados:
+                break
+
+        return resultados
+
+    except requests.RequestException:
         return []
-
-    salida = []
-    vistos = set()
-
-    for r in resultados.get("organic_results", []):
-
-        url = r.get("link", "")
-
-        if not url or url in vistos:
-            continue
-
-        vistos.add(url)
-
-        dom = dominio(url)
-
-        salida.append({
-            "titulo": r.get("title", ""),
-            "url": url,
-            "descripcion": r.get("snippet", ""),
-            "dominio": dom,
-            "score": score(dom),
-            "oficial": dom in DOMINIOS_OFICIALES
-        })
-
-    salida.sort(key=lambda x: x["score"], reverse=True)
-
-    return salida[:max_resultados]
-
-
-# ===========================================
-# PRUEBA
-# ===========================================
-
-if __name__ == "__main__":
-
-    while True:
-
-        consulta = input("Consulta: ").strip()
-
-        if consulta == "":
-            break
-
-        resultados = buscar_web(consulta)
-
-        for r in resultados:
-
-            print("=" * 70)
-
-            print(r["titulo"])
-
-            print(r["url"])
-
-            print(r["dominio"])
-
-            print(r["score"])
-
-            print(r["descripcion"])
-
-            print()
+    except Exception:
+        return []
