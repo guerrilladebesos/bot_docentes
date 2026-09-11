@@ -12,13 +12,11 @@ import requests
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Modelo estable de Gemini adecuado para tareas de alta frecuencia.
-MODEL = "gemini-2.5-flash"
+# Google indica actualmente Gemini 3.6 Flash como modelo estable.
+MODEL = "gemini-3.6-flash"
 
-URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    f"{MODEL}:generateContent"
-)
+# API de Interactions, recomendada actualmente por Google.
+URL = "https://generativelanguage.googleapis.com/v1/interactions"
 
 # ============================================================
 # LÍMITES DE SEGURIDAD
@@ -29,7 +27,6 @@ MAX_CARACTERES_POR_FRAGMENTO = 4500
 MAX_CARACTERES_CONTEXTO = 18000
 MAX_TOKENS_SALIDA = 1500
 
-# Reintentos para errores temporales.
 MAX_REINTENTOS = 4
 ESPERA_INICIAL = 2
 
@@ -42,7 +39,6 @@ _cache_lock = threading.Lock()
 def construir_contexto(fragmentos):
     """
     Construye un contexto compacto con los fragmentos más relevantes.
-    Limitar el contexto evita enviar información innecesaria al modelo.
     """
     contexto = ""
     caracteres = 0
@@ -114,27 +110,46 @@ def _guardar_cache(clave, respuesta):
 
 
 def _espera_retry(response, intento):
-    """
-    Respeta Retry-After si Google lo proporciona.
-    Si no, utiliza exponential backoff.
-    """
     retry_after = response.headers.get("Retry-After")
 
     if retry_after:
         try:
             return max(float(retry_after), 1)
-
         except (TypeError, ValueError):
             pass
 
     return ESPERA_INICIAL * (2 ** (intento - 1))
 
 
+def _extraer_texto(respuesta_json):
+    """
+    Extrae el texto de la respuesta de la Interactions API.
+    Google devuelve el resultado dentro de steps.
+    """
+    for step in respuesta_json.get("steps", []):
+        if step.get("type") != "model_output":
+            continue
+
+        contenido = step.get("content", [])
+
+        if isinstance(contenido, str):
+            return contenido
+
+        for parte in contenido:
+            if isinstance(parte, dict):
+                texto = parte.get("text")
+                if texto:
+                    return texto
+
+    return None
+
+
 def consultar_ia(pregunta, fragmentos):
     """
-    Genera la respuesta utilizando Gemini en lugar de Mistral.
+    Genera la respuesta utilizando Gemini 3.6 Flash
+    mediante la Interactions API.
 
-    La función conserva la misma interfaz que la anterior:
+    Mantiene la misma interfaz que la versión anterior:
         consultar_ia(pregunta, fragmentos)
 
     Por tanto, bot.py no necesita cambios.
@@ -148,17 +163,11 @@ def consultar_ia(pregunta, fragmentos):
 
     contexto = construir_contexto(fragmentos)
 
-    # Evita llamadas repetidas para la misma pregunta y contexto.
     clave = _clave_cache(pregunta, contexto)
     respuesta_cache = _obtener_cache(clave)
 
     if respuesta_cache is not None:
         return respuesta_cache
-
-    headers = {
-        "x-goog-api-key": GEMINI_API_KEY,
-        "Content-Type": "application/json",
-    }
 
     system_instruction = """
 Eres una especialista en normativa educativa de Cantabria.
@@ -194,7 +203,9 @@ indícalo expresamente en lugar de completar la respuesta
 con conocimientos propios.
 """
 
-    prompt_usuario = f"""
+    prompt = f"""
+{system_instruction}
+
 PREGUNTA DEL USUARIO:
 
 {pregunta}
@@ -207,27 +218,14 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
 """
 
     data = {
-        "system_instruction": {
-            "parts": [
-                {
-                    "text": system_instruction
-                }
-            ]
-        },
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": prompt_usuario
-                    }
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": MAX_TOKENS_SALIDA,
-        },
+        "model": MODEL,
+        "input": prompt,
+        "max_output_tokens": MAX_TOKENS_SALIDA,
+    }
+
+    headers = {
+        "x-goog-api-key": GEMINI_API_KEY,
+        "Content-Type": "application/json",
     }
 
     ultimo_error = None
@@ -241,50 +239,31 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                 timeout=60,
             )
 
-            # ----------------------------------------------------
-            # RESPUESTA CORRECTA
-            # ----------------------------------------------------
-
             if response.status_code == 200:
                 try:
                     respuesta_json = response.json()
-
-                    respuesta = (
-                        respuesta_json["candidates"][0]
-                        ["content"]["parts"][0]["text"]
-                    )
+                    respuesta = _extraer_texto(respuesta_json)
 
                     if not respuesta:
                         return (
-                            "Gemini no devolvió contenido en la respuesta."
+                            "Gemini no devolvió texto en la respuesta.\n\n"
+                            f"Respuesta recibida:\n{response.text}"
                         )
 
                     _guardar_cache(clave, respuesta)
-
                     return respuesta
 
-                except (
-                    KeyError,
-                    IndexError,
-                    TypeError,
-                    ValueError,
-                ) as e:
+                except (TypeError, ValueError) as e:
                     return (
                         "Respuesta inesperada de Gemini:\n\n"
-                        f"{e}\n\n"
-                        f"Respuesta recibida:\n{response.text}"
+                        f"{e}\n\n{response.text}"
                     )
-
-            # ----------------------------------------------------
-            # RATE LIMIT
-            # ----------------------------------------------------
 
             if response.status_code == 429:
                 ultimo_error = response.text
 
                 if intento < MAX_REINTENTOS:
-                    espera = _espera_retry(response, intento)
-                    time.sleep(espera)
+                    time.sleep(_espera_retry(response, intento))
                     continue
 
                 return (
@@ -294,22 +273,20 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                     "Espera unos segundos y vuelve a realizar la consulta."
                 )
 
-            # ----------------------------------------------------
-            # ERRORES DE AUTENTICACIÓN
-            # ----------------------------------------------------
-
             if response.status_code in (401, 403):
                 return (
                     f"Error de autenticación de Gemini "
                     f"({response.status_code}).\n\n"
-                    "Comprueba que GEMINI_API_KEY esté correctamente "
-                    "configurada en Railway y que la API de Gemini "
-                    "esté habilitada para el proyecto."
+                    "Comprueba GEMINI_API_KEY y que la API de Gemini "
+                    "esté habilitada para el proyecto de Google."
                 )
 
-            # ----------------------------------------------------
-            # OTROS ERRORES 4XX
-            # ----------------------------------------------------
+            if response.status_code == 404:
+                return (
+                    "Gemini no encuentra el modelo o el endpoint solicitado "
+                    f"(404).\n\nModelo utilizado: {MODEL}\n\n"
+                    f"Respuesta de Google:\n{response.text}"
+                )
 
             if 400 <= response.status_code < 500:
                 return (
@@ -317,15 +294,10 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                     f"{response.text}"
                 )
 
-            # ----------------------------------------------------
-            # ERRORES 5XX
-            # ----------------------------------------------------
-
             ultimo_error = response.text
 
             if intento < MAX_REINTENTOS:
-                espera = _espera_retry(response, intento)
-                time.sleep(espera)
+                time.sleep(_espera_retry(response, intento))
                 continue
 
             return (
@@ -338,8 +310,9 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
             ultimo_error = str(e)
 
             if intento < MAX_REINTENTOS:
-                espera = ESPERA_INICIAL * (2 ** (intento - 1))
-                time.sleep(espera)
+                time.sleep(
+                    ESPERA_INICIAL * (2 ** (intento - 1))
+                )
                 continue
 
             return (
@@ -351,8 +324,9 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
             ultimo_error = str(e)
 
             if intento < MAX_REINTENTOS:
-                espera = ESPERA_INICIAL * (2 ** (intento - 1))
-                time.sleep(espera)
+                time.sleep(
+                    ESPERA_INICIAL * (2 ** (intento - 1))
+                )
                 continue
 
             return f"Error de conexión con Gemini:\n\n{e}"
