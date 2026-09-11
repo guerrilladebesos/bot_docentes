@@ -10,12 +10,7 @@ SERP_API_KEY = os.getenv("SERP_API_KEY")
 
 DOMINIOS_OFICIALES = {
     "educantabria.es": 100,
-    "boc.cantabria.es": 98,
-    "boe.es": 96,
-    "educacion.gob.es": 94,
-    "administracion.gob.es": 92,
-    "inap.es": 90,
-    "empleopublico.gob.es": 88,
+    
 }
 
 
@@ -61,7 +56,7 @@ def score(dominio_web):
 # BUSCADOR
 # ===========================================
 
-def buscar_web(pregunta, max_resultados=5):
+def buscar_web(pregunta, max_resultados=2):
 
     if not SERP_API_KEY:
         return []
