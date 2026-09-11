@@ -4,47 +4,62 @@ from urllib.parse import urlparse
 from config import SERP_API_KEY
 
 SERP_URL = "https://serpapi.com/search.json"
-DOMINIO = "educantabria.es"
-MAX_RESULTADOS = 2
+
+# Fuentes permitidas:
+# 1. Portal educativo oficial de Cantabria
+# 2. Federación de Enseñanza de CCOO de Cantabria
+DOMINIOS_PERMITIDOS = (
+    "educantabria.es",
+    "cantabria.fe.ccoo.es",
+)
+
+MAX_RESULTADOS = 3
 
 
-def es_educantabria(url):
-    """Comprueba que la URL pertenece realmente a educantabria.es."""
+def es_dominio_permitido(url):
+    """Comprueba que la URL pertenece a una de las fuentes autorizadas."""
     try:
         hostname = urlparse(url).hostname
+
         if not hostname:
             return False
 
         hostname = hostname.lower().rstrip(".")
 
-        return (
-            hostname == DOMINIO
-            or hostname.endswith("." + DOMINIO)
+        return any(
+            hostname == dominio
+            or hostname.endswith("." + dominio)
+            for dominio in DOMINIOS_PERMITIDOS
         )
 
     except Exception:
         return False
 
 
-def buscar_web(pregunta, max_resultados=2):
+def buscar_web(pregunta, max_resultados=3):
     """
-    Busca información adicional en Internet exclusivamente en
-    educantabria.es.
+    Busca información adicional en Internet exclusivamente en:
 
-    IMPORTANTE:
-    Aunque bot.py llame a buscar_web(..., max_resultados=5),
-    esta función impone un máximo real de 2 resultados.
+    - educantabria.es
+    - cantabria.fe.ccoo.es
+
+    Devuelve como máximo 3 enlaces.
     """
 
     if not SERP_API_KEY:
         print("SERP_API_KEY no está configurada.")
         return []
 
-    # Límite ABSOLUTO: nunca devolver más de 2 resultados.
-    limite = 2
+    # Límite absoluto: nunca se devolverán más de 3 resultados.
+    limite = 3
 
     try:
-        consulta = f"site:{DOMINIO} {pregunta}"
+        # Google/SerpAPI acepta OR para buscar simultáneamente
+        # en los dos dominios autorizados.
+        consulta = (
+            f"{pregunta} "
+            f"(site:educantabria.es OR site:cantabria.fe.ccoo.es)"
+        )
 
         params = {
             "engine": "google",
@@ -64,8 +79,6 @@ def buscar_web(pregunta, max_resultados=2):
         respuesta.raise_for_status()
         datos = respuesta.json()
 
-        # SerpAPI puede devolver un mensaje de error dentro del JSON
-        # aunque HTTP sea 200.
         if datos.get("error"):
             print("Error de SerpAPI:", datos["error"])
             return []
@@ -79,9 +92,10 @@ def buscar_web(pregunta, max_resultados=2):
             if not enlace or not titulo:
                 continue
 
-            # Segunda barrera: rechazamos cualquier URL que no sea
-            # realmente de educantabria.es.
-            if not es_educantabria(enlace):
+            # Segunda barrera de seguridad:
+            # aunque Google ignore parcialmente el filtro site:,
+            # aquí rechazamos cualquier dominio no autorizado.
+            if not es_dominio_permitido(enlace):
                 continue
 
             resultados.append({
@@ -90,11 +104,10 @@ def buscar_web(pregunta, max_resultados=2):
                 "descripcion": resultado.get("snippet", "")
             })
 
-            # Límite absoluto.
             if len(resultados) >= limite:
                 break
 
-        print(f"Resultados web Educantabria: {len(resultados)}")
+        print(f"Resultados web autorizados: {len(resultados)}")
 
         return resultados
 
