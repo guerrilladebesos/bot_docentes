@@ -14,6 +14,13 @@ mistral Key
 pJKJSbWPzCdfm6QMPGDIv6ED2VPOd3ST
 
 
+
+mistral key 2
+
+
+k7UuErn2fVl4nLUkLkwA1Hg5NMABRjOs
+
+
 serpapi
 dff490143d30daec2d151afa9c01023b8301a3d7546540140b114124d66a403a
 
