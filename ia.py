@@ -206,9 +206,9 @@ intégrala en una única respuesta estructurada.
     }
 
     headers = {
-        "x-goog-api-key": GEMINI_API_KEY,
-        "Content-Type": "application/json"
-    }
+    "Content-Type": "application/json",
+    "x-goog-api-key": GEMINI_API_KEY
+}
 
     ultimo_error = None
 
