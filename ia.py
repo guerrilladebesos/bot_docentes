@@ -6,48 +6,44 @@ import time
 import requests
 
 
-# ============================================================
-# CONFIGURACIÓN
-# ============================================================
-
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Utilizamos el modelo que Google indicó en el error recibido.
 MODEL = "gemini-3.6-flash"
 
-# API REST estándar de Gemini.
 URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{MODEL}:generateContent"
 )
 
-MAX_FRAGMENTOS = 5
-MAX_CARACTERES_POR_FRAGMENTO = 4500
-MAX_CARACTERES_CONTEXTO = 18000
-MAX_TOKENS_SALIDA = 1500
+# ============================================================
+# CONFIGURACIÓN DE RESPUESTA
+# ============================================================
 
+# Restaurado el comportamiento amplio del ia.py original:
+# se envían TODOS los fragmentos encontrados y su texto completo.
+# No se recortan fragmentos ni el contexto documental.
+
+MAX_TOKENS_SALIDA = 4000
+
+# Reintentos para errores temporales.
 MAX_REINTENTOS = 4
 ESPERA_INICIAL = 2
 
+# Caché local para preguntas repetidas.
 CACHE_MAXIMO = 100
 _cache = {}
 _cache_lock = threading.Lock()
 
 
 def construir_contexto(fragmentos):
+    """
+    Construye el contexto utilizando TODOS los fragmentos encontrados,
+    sin limitar número de fragmentos ni longitud del texto.
+    """
     contexto = ""
-    caracteres = 0
 
-    for i, fragmento in enumerate(fragmentos[:MAX_FRAGMENTOS], start=1):
-        texto = str(fragmento.get("texto", "") or "")
-
-        if len(texto) > MAX_CARACTERES_POR_FRAGMENTO:
-            texto = (
-                texto[:MAX_CARACTERES_POR_FRAGMENTO]
-                + "\n[Fragmento recortado]"
-            )
-
-        bloque = f"""
+    for i, fragmento in enumerate(fragmentos, start=1):
+        contexto += f"""
 =============================
 FRAGMENTO {i}
 
@@ -61,24 +57,9 @@ Páginas:
 {fragmento.get("pagina_inicio", "?")} - {fragmento.get("pagina_fin", "?")}
 
 Texto:
-{texto}
+{fragmento.get("texto", "")}
 
 """
-
-        if caracteres + len(bloque) > MAX_CARACTERES_CONTEXTO:
-            espacio = MAX_CARACTERES_CONTEXTO - caracteres
-
-            if espacio <= 0:
-                break
-
-            contexto += bloque[:espacio]
-            contexto += (
-                "\n[Contexto limitado para controlar el consumo de tokens]\n"
-            )
-            break
-
-        contexto += bloque
-        caracteres += len(bloque)
 
     return contexto
 
@@ -116,110 +97,37 @@ def _espera_retry(response, intento):
     return ESPERA_INICIAL * (2 ** (intento - 1))
 
 
-def _diagnostico_api_key():
-    """
-    Diagnóstico seguro:
-    nunca imprime la API key completa.
-    """
-    if not GEMINI_API_KEY:
-        return {
-            "presente": False,
-            "longitud": 0,
-            "prefijo": "NO_DEFINIDA",
-        }
-
-    return {
-        "presente": True,
-        "longitud": len(GEMINI_API_KEY),
-        "prefijo": GEMINI_API_KEY[:3],
-        "tiene_espacios_extremos": (
-            GEMINI_API_KEY != GEMINI_API_KEY.strip()
-        ),
-    }
-
-
-def _diagnostico_respuesta(response):
-    """
-    Devuelve información útil del error sin exponer credenciales.
-    """
-    try:
-        datos = response.json()
-    except ValueError:
-        datos = None
-
-    diagnostico = {
-        "status_code": response.status_code,
-        "content_type": response.headers.get("Content-Type"),
-        "retry_after": response.headers.get("Retry-After"),
-    }
-
-    if isinstance(datos, dict):
-        error = datos.get("error", {})
-
-        if isinstance(error, dict):
-            diagnostico["error_status"] = error.get("status")
-            diagnostico["error_message"] = error.get("message")
-            diagnostico["error_reason"] = error.get("reason")
-            diagnostico["error_code"] = error.get("code")
-
-            detalles = error.get("details")
-
-            if isinstance(detalles, list):
-                razones = []
-
-                for detalle in detalles:
-                    if isinstance(detalle, dict):
-                        razon = detalle.get("reason")
-                        if razon:
-                            razones.append(str(razon))
-
-                if razones:
-                    diagnostico["detail_reasons"] = razones
-
-    return diagnostico
-
-
 def consultar_ia(pregunta, fragmentos):
     """
-    Consulta Gemini.
+    Genera una respuesta amplia con Gemini.
 
-    Mantiene exactamente la misma interfaz que las versiones anteriores,
+    Mantiene la misma interfaz que las versiones anteriores,
     por lo que bot.py no necesita cambios.
     """
 
-    diagnostico_key = _diagnostico_api_key()
-
-    if not diagnostico_key["presente"]:
+    if not GEMINI_API_KEY:
         return (
-            "ERROR DE CONFIGURACIÓN DE GEMINI\n\n"
-            "GEMINI_API_KEY no está definida en el entorno.\n\n"
-            "Diagnóstico seguro:\n"
-            f"Clave presente: {diagnostico_key['presente']}"
-        )
-
-    if diagnostico_key.get("tiene_espacios_extremos"):
-        return (
-            "ERROR DE CONFIGURACIÓN DE GEMINI\n\n"
-            "GEMINI_API_KEY contiene espacios al principio o al final. "
-            "Corrige la variable en Railway."
+            "Error de configuración: no se ha encontrado "
+            "GEMINI_API_KEY."
         )
 
     contexto = construir_contexto(fragmentos)
 
+    # Evita repetir una llamada si llega exactamente la misma
+    # pregunta con exactamente el mismo contexto.
     clave = _clave_cache(pregunta, contexto)
     respuesta_cache = _obtener_cache(clave)
 
     if respuesta_cache is not None:
-        print("Gemini: respuesta recuperada de caché.")
         return respuesta_cache
 
     system_instruction = """
 Eres una especialista en normativa educativa de Cantabria.
 
-Debes responder EXCLUSIVAMENTE utilizando la información
+Debes responder utilizando exclusivamente la información
 contenida en los fragmentos documentales proporcionados.
 
-Normas obligatorias:
+Normas:
 
 1. No inventes información.
 
@@ -232,18 +140,29 @@ indica expresamente que no has encontrado base documental suficiente.
 - fundamento normativo
 - artículo, disposición, apartado o epígrafe relevante.
 
-4. Responde de forma clara, rigurosa y directa.
+4. Responde de forma clara, rigurosa y suficientemente desarrollada.
 
 5. Si existen varias normas relacionadas,
 explica claramente la diferencia entre ellas.
 
-6. Prioriza la respuesta concreta a la pregunta.
+6. Responde de forma completa a la pregunta.
+No reduzcas innecesariamente la respuesta por brevedad.
 
-7. No añadas información externa que no aparezca
-en los fragmentos proporcionados.
+7. Utiliza los diferentes fragmentos disponibles para
+contrastar y completar la respuesta.
 
-8. Si los fragmentos son insuficientes o contradictorios,
+8. Si los fragmentos contienen información relacionada
+pero no suficiente para responder con seguridad,
 indícalo expresamente.
+
+9. No añadas como hechos jurídicos datos que no estén
+respaldados por la documentación proporcionada.
+
+10. Cuando la pregunta requiera una explicación,
+desarrolla los aspectos relevantes y, cuando proceda,
+incluye requisitos, excepciones, plazos, destinatarios,
+procedimiento y fundamento normativo que aparezcan
+en los documentos.
 """
 
     prompt_usuario = f"""
@@ -251,46 +170,45 @@ PREGUNTA DEL USUARIO:
 
 {pregunta}
 
-DOCUMENTACIÓN ENCONTRADA:
+FRAGMENTOS DOCUMENTALES ENCONTRADOS:
 
 {contexto}
 
-Redacta la respuesta basándote exclusivamente en esta documentación.
+Elabora una respuesta completa, rigurosa y útil para un
+docente de la enseñanza pública de Cantabria.
+
+Utiliza toda la documentación relevante proporcionada.
+Si varios fragmentos aportan información complementaria,
+intégrala en una única respuesta estructurada.
 """
 
     data = {
+        "systemInstruction": {
+            "parts": [
+                {
+                    "text": system_instruction
+                }
+            ]
+        },
         "contents": [
             {
                 "role": "user",
                 "parts": [
                     {
-                        "text": (
-                            system_instruction
-                            + "\n\n"
-                            + prompt_usuario
-                        )
+                        "text": prompt_usuario
                     }
-                ],
+                ]
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": MAX_TOKENS_SALIDA,
-        },
+            "maxOutputTokens": MAX_TOKENS_SALIDA
+        }
     }
 
     headers = {
         "x-goog-api-key": GEMINI_API_KEY,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
-
-    print(
-        "Gemini diagnóstico: "
-        f"modelo={MODEL}, "
-        f"clave_presente={diagnostico_key['presente']}, "
-        f"longitud_clave={diagnostico_key['longitud']}, "
-        f"prefijo={diagnostico_key['prefijo']}"
-    )
 
     ultimo_error = None
 
@@ -300,12 +218,13 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                 URL,
                 headers=headers,
                 json=data,
-                timeout=60,
+                timeout=90
             )
 
             if response.status_code == 200:
                 try:
                     respuesta_json = response.json()
+
                     respuesta = (
                         respuesta_json["candidates"][0]
                         ["content"]["parts"][0]["text"]
@@ -313,17 +232,18 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
 
                     if not respuesta:
                         return (
-                            "Gemini no devolvió texto en la respuesta."
+                            "Gemini no devolvió contenido en la respuesta."
                         )
 
                     _guardar_cache(clave, respuesta)
+
                     return respuesta
 
                 except (
                     KeyError,
                     IndexError,
                     TypeError,
-                    ValueError,
+                    ValueError
                 ) as e:
                     return (
                         "Respuesta inesperada de Gemini:\n\n"
@@ -331,86 +251,8 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                         f"Respuesta recibida:\n{response.text}"
                     )
 
-            diagnostico = _diagnostico_respuesta(response)
-
-            # ----------------------------------------------------
-            # 401: MOSTRAR EL MOTIVO REAL
-            # ----------------------------------------------------
-
-            if response.status_code == 401:
-                print(
-                    "GEMINI 401 DIAGNÓSTICO:",
-                    diagnostico,
-                )
-
-                return (
-                    "ERROR DE AUTENTICACIÓN DE GEMINI (401)\n\n"
-                    "Google ha rechazado la credencial.\n\n"
-                    "DIAGNÓSTICO:\n"
-                    f"- Modelo: {MODEL}\n"
-                    f"- Clave presente: "
-                    f"{diagnostico_key['presente']}\n"
-                    f"- Longitud de clave: "
-                    f"{diagnostico_key['longitud']}\n"
-                    f"- Prefijo: "
-                    f"{diagnostico_key['prefijo']}\n"
-                    f"- Estado: "
-                    f"{diagnostico.get('error_status', 'no indicado')}\n"
-                    f"- Motivo: "
-                    f"{diagnostico.get('error_reason', 'no indicado')}\n"
-                    f"- Código: "
-                    f"{diagnostico.get('error_code', 'no indicado')}\n"
-                    f"- Mensaje de Google: "
-                    f"{diagnostico.get('error_message', 'no indicado')}\n"
-                    f"- Retry-After: "
-                    f"{diagnostico.get('retry_after', 'no indicado')}\n"
-                    f"- Razones adicionales: "
-                    f"{diagnostico.get('detail_reasons', 'ninguna')}\n\n"
-                    "La clave completa NO se muestra por seguridad."
-                )
-
-            # ----------------------------------------------------
-            # 403
-            # ----------------------------------------------------
-
-            if response.status_code == 403:
-                print(
-                    "GEMINI 403 DIAGNÓSTICO:",
-                    diagnostico,
-                )
-
-                return (
-                    "ERROR DE PERMISOS DE GEMINI (403)\n\n"
-                    "La clave existe, pero Google está rechazando "
-                    "el acceso al servicio/modelo.\n\n"
-                    f"Motivo: "
-                    f"{diagnostico.get('error_reason', 'no indicado')}\n"
-                    f"Mensaje: "
-                    f"{diagnostico.get('error_message', 'no indicado')}"
-                )
-
-            # ----------------------------------------------------
-            # 404
-            # ----------------------------------------------------
-
-            if response.status_code == 404:
-                return (
-                    "GEMINI NO ENCUENTRA EL MODELO (404)\n\n"
-                    f"Modelo: {MODEL}\n\n"
-                    f"Respuesta de Google:\n{response.text}"
-                )
-
-            # ----------------------------------------------------
-            # 429
-            # ----------------------------------------------------
-
             if response.status_code == 429:
                 ultimo_error = response.text
-
-                print(
-                    "GEMINI 429:",
-                    diagnostico,
-                )
 
                 if intento < MAX_REINTENTOS:
                     time.sleep(
@@ -419,24 +261,31 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                     continue
 
                 return (
-                    "GEMINI ESTÁ LIMITANDO LAS PETICIONES (429).\n\n"
+                    "Gemini está limitando temporalmente las peticiones "
+                    "(429).\n\n"
                     f"Se realizaron {MAX_REINTENTOS} intentos.\n\n"
-                    f"Mensaje de Google:\n{response.text}"
+                    "Espera unos segundos y vuelve a realizar la consulta."
                 )
 
-            # ----------------------------------------------------
-            # OTROS 4XX
-            # ----------------------------------------------------
+            if response.status_code in (401, 403):
+                return (
+                    f"Error de autenticación/permisos de Gemini "
+                    f"({response.status_code}).\n\n"
+                    f"{response.text}"
+                )
+
+            if response.status_code == 404:
+                return (
+                    "Gemini no encuentra el modelo solicitado (404).\n\n"
+                    f"Modelo: {MODEL}\n\n"
+                    f"Respuesta de Google:\n{response.text}"
+                )
 
             if 400 <= response.status_code < 500:
                 return (
                     f"Error de Gemini ({response.status_code})\n\n"
                     f"{response.text}"
                 )
-
-            # ----------------------------------------------------
-            # 5XX
-            # ----------------------------------------------------
 
             ultimo_error = response.text
 
