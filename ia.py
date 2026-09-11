@@ -7,20 +7,19 @@ import requests
 
 
 # ============================================================
-# CONFIGURACIÓN DE GEMINI
+# CONFIGURACIÓN
 # ============================================================
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Google indica actualmente Gemini 3.6 Flash como modelo estable.
+# Utilizamos el modelo que Google indicó en el error recibido.
 MODEL = "gemini-3.6-flash"
 
-# API de Interactions, recomendada actualmente por Google.
-URL = "https://generativelanguage.googleapis.com/v1/interactions"
-
-# ============================================================
-# LÍMITES DE SEGURIDAD
-# ============================================================
+# API REST estándar de Gemini.
+URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{MODEL}:generateContent"
+)
 
 MAX_FRAGMENTOS = 5
 MAX_CARACTERES_POR_FRAGMENTO = 4500
@@ -30,16 +29,12 @@ MAX_TOKENS_SALIDA = 1500
 MAX_REINTENTOS = 4
 ESPERA_INICIAL = 2
 
-# Caché local para preguntas repetidas.
 CACHE_MAXIMO = 100
 _cache = {}
 _cache_lock = threading.Lock()
 
 
 def construir_contexto(fragmentos):
-    """
-    Construye un contexto compacto con los fragmentos más relevantes.
-    """
     contexto = ""
     caracteres = 0
 
@@ -121,44 +116,92 @@ def _espera_retry(response, intento):
     return ESPERA_INICIAL * (2 ** (intento - 1))
 
 
-def _extraer_texto(respuesta_json):
+def _diagnostico_api_key():
     """
-    Extrae el texto de la respuesta de la Interactions API.
-    Google devuelve el resultado dentro de steps.
+    Diagnóstico seguro:
+    nunca imprime la API key completa.
     """
-    for step in respuesta_json.get("steps", []):
-        if step.get("type") != "model_output":
-            continue
+    if not GEMINI_API_KEY:
+        return {
+            "presente": False,
+            "longitud": 0,
+            "prefijo": "NO_DEFINIDA",
+        }
 
-        contenido = step.get("content", [])
+    return {
+        "presente": True,
+        "longitud": len(GEMINI_API_KEY),
+        "prefijo": GEMINI_API_KEY[:3],
+        "tiene_espacios_extremos": (
+            GEMINI_API_KEY != GEMINI_API_KEY.strip()
+        ),
+    }
 
-        if isinstance(contenido, str):
-            return contenido
 
-        for parte in contenido:
-            if isinstance(parte, dict):
-                texto = parte.get("text")
-                if texto:
-                    return texto
+def _diagnostico_respuesta(response):
+    """
+    Devuelve información útil del error sin exponer credenciales.
+    """
+    try:
+        datos = response.json()
+    except ValueError:
+        datos = None
 
-    return None
+    diagnostico = {
+        "status_code": response.status_code,
+        "content_type": response.headers.get("Content-Type"),
+        "retry_after": response.headers.get("Retry-After"),
+    }
+
+    if isinstance(datos, dict):
+        error = datos.get("error", {})
+
+        if isinstance(error, dict):
+            diagnostico["error_status"] = error.get("status")
+            diagnostico["error_message"] = error.get("message")
+            diagnostico["error_reason"] = error.get("reason")
+            diagnostico["error_code"] = error.get("code")
+
+            detalles = error.get("details")
+
+            if isinstance(detalles, list):
+                razones = []
+
+                for detalle in detalles:
+                    if isinstance(detalle, dict):
+                        razon = detalle.get("reason")
+                        if razon:
+                            razones.append(str(razon))
+
+                if razones:
+                    diagnostico["detail_reasons"] = razones
+
+    return diagnostico
 
 
 def consultar_ia(pregunta, fragmentos):
     """
-    Genera la respuesta utilizando Gemini 3.6 Flash
-    mediante la Interactions API.
+    Consulta Gemini.
 
-    Mantiene la misma interfaz que la versión anterior:
-        consultar_ia(pregunta, fragmentos)
-
-    Por tanto, bot.py no necesita cambios.
+    Mantiene exactamente la misma interfaz que las versiones anteriores,
+    por lo que bot.py no necesita cambios.
     """
 
-    if not GEMINI_API_KEY:
+    diagnostico_key = _diagnostico_api_key()
+
+    if not diagnostico_key["presente"]:
         return (
-            "Error de configuración: no se ha encontrado "
-            "GEMINI_API_KEY."
+            "ERROR DE CONFIGURACIÓN DE GEMINI\n\n"
+            "GEMINI_API_KEY no está definida en el entorno.\n\n"
+            "Diagnóstico seguro:\n"
+            f"Clave presente: {diagnostico_key['presente']}"
+        )
+
+    if diagnostico_key.get("tiene_espacios_extremos"):
+        return (
+            "ERROR DE CONFIGURACIÓN DE GEMINI\n\n"
+            "GEMINI_API_KEY contiene espacios al principio o al final. "
+            "Corrige la variable en Railway."
         )
 
     contexto = construir_contexto(fragmentos)
@@ -167,6 +210,7 @@ def consultar_ia(pregunta, fragmentos):
     respuesta_cache = _obtener_cache(clave)
 
     if respuesta_cache is not None:
+        print("Gemini: respuesta recuperada de caché.")
         return respuesta_cache
 
     system_instruction = """
@@ -199,13 +243,10 @@ explica claramente la diferencia entre ellas.
 en los fragmentos proporcionados.
 
 8. Si los fragmentos son insuficientes o contradictorios,
-indícalo expresamente en lugar de completar la respuesta
-con conocimientos propios.
+indícalo expresamente.
 """
 
-    prompt = f"""
-{system_instruction}
-
+    prompt_usuario = f"""
 PREGUNTA DEL USUARIO:
 
 {pregunta}
@@ -218,15 +259,38 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
 """
 
     data = {
-        "model": MODEL,
-        "input": prompt,
-        "max_output_tokens": MAX_TOKENS_SALIDA,
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": (
+                            system_instruction
+                            + "\n\n"
+                            + prompt_usuario
+                        )
+                    }
+                ],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": MAX_TOKENS_SALIDA,
+        },
     }
 
     headers = {
         "x-goog-api-key": GEMINI_API_KEY,
         "Content-Type": "application/json",
     }
+
+    print(
+        "Gemini diagnóstico: "
+        f"modelo={MODEL}, "
+        f"clave_presente={diagnostico_key['presente']}, "
+        f"longitud_clave={diagnostico_key['longitud']}, "
+        f"prefijo={diagnostico_key['prefijo']}"
+    )
 
     ultimo_error = None
 
@@ -242,51 +306,127 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
             if response.status_code == 200:
                 try:
                     respuesta_json = response.json()
-                    respuesta = _extraer_texto(respuesta_json)
+                    respuesta = (
+                        respuesta_json["candidates"][0]
+                        ["content"]["parts"][0]["text"]
+                    )
 
                     if not respuesta:
                         return (
-                            "Gemini no devolvió texto en la respuesta.\n\n"
-                            f"Respuesta recibida:\n{response.text}"
+                            "Gemini no devolvió texto en la respuesta."
                         )
 
                     _guardar_cache(clave, respuesta)
                     return respuesta
 
-                except (TypeError, ValueError) as e:
+                except (
+                    KeyError,
+                    IndexError,
+                    TypeError,
+                    ValueError,
+                ) as e:
                     return (
                         "Respuesta inesperada de Gemini:\n\n"
-                        f"{e}\n\n{response.text}"
+                        f"{e}\n\n"
+                        f"Respuesta recibida:\n{response.text}"
                     )
+
+            diagnostico = _diagnostico_respuesta(response)
+
+            # ----------------------------------------------------
+            # 401: MOSTRAR EL MOTIVO REAL
+            # ----------------------------------------------------
+
+            if response.status_code == 401:
+                print(
+                    "GEMINI 401 DIAGNÓSTICO:",
+                    diagnostico,
+                )
+
+                return (
+                    "ERROR DE AUTENTICACIÓN DE GEMINI (401)\n\n"
+                    "Google ha rechazado la credencial.\n\n"
+                    "DIAGNÓSTICO:\n"
+                    f"- Modelo: {MODEL}\n"
+                    f"- Clave presente: "
+                    f"{diagnostico_key['presente']}\n"
+                    f"- Longitud de clave: "
+                    f"{diagnostico_key['longitud']}\n"
+                    f"- Prefijo: "
+                    f"{diagnostico_key['prefijo']}\n"
+                    f"- Estado: "
+                    f"{diagnostico.get('error_status', 'no indicado')}\n"
+                    f"- Motivo: "
+                    f"{diagnostico.get('error_reason', 'no indicado')}\n"
+                    f"- Código: "
+                    f"{diagnostico.get('error_code', 'no indicado')}\n"
+                    f"- Mensaje de Google: "
+                    f"{diagnostico.get('error_message', 'no indicado')}\n"
+                    f"- Retry-After: "
+                    f"{diagnostico.get('retry_after', 'no indicado')}\n"
+                    f"- Razones adicionales: "
+                    f"{diagnostico.get('detail_reasons', 'ninguna')}\n\n"
+                    "La clave completa NO se muestra por seguridad."
+                )
+
+            # ----------------------------------------------------
+            # 403
+            # ----------------------------------------------------
+
+            if response.status_code == 403:
+                print(
+                    "GEMINI 403 DIAGNÓSTICO:",
+                    diagnostico,
+                )
+
+                return (
+                    "ERROR DE PERMISOS DE GEMINI (403)\n\n"
+                    "La clave existe, pero Google está rechazando "
+                    "el acceso al servicio/modelo.\n\n"
+                    f"Motivo: "
+                    f"{diagnostico.get('error_reason', 'no indicado')}\n"
+                    f"Mensaje: "
+                    f"{diagnostico.get('error_message', 'no indicado')}"
+                )
+
+            # ----------------------------------------------------
+            # 404
+            # ----------------------------------------------------
+
+            if response.status_code == 404:
+                return (
+                    "GEMINI NO ENCUENTRA EL MODELO (404)\n\n"
+                    f"Modelo: {MODEL}\n\n"
+                    f"Respuesta de Google:\n{response.text}"
+                )
+
+            # ----------------------------------------------------
+            # 429
+            # ----------------------------------------------------
 
             if response.status_code == 429:
                 ultimo_error = response.text
 
+                print(
+                    "GEMINI 429:",
+                    diagnostico,
+                )
+
                 if intento < MAX_REINTENTOS:
-                    time.sleep(_espera_retry(response, intento))
+                    time.sleep(
+                        _espera_retry(response, intento)
+                    )
                     continue
 
                 return (
-                    "Gemini está limitando temporalmente las peticiones "
-                    "(429).\n\n"
+                    "GEMINI ESTÁ LIMITANDO LAS PETICIONES (429).\n\n"
                     f"Se realizaron {MAX_REINTENTOS} intentos.\n\n"
-                    "Espera unos segundos y vuelve a realizar la consulta."
+                    f"Mensaje de Google:\n{response.text}"
                 )
 
-            if response.status_code in (401, 403):
-                return (
-                    f"Error de autenticación de Gemini "
-                    f"({response.status_code}).\n\n"
-                    "Comprueba GEMINI_API_KEY y que la API de Gemini "
-                    "esté habilitada para el proyecto de Google."
-                )
-
-            if response.status_code == 404:
-                return (
-                    "Gemini no encuentra el modelo o el endpoint solicitado "
-                    f"(404).\n\nModelo utilizado: {MODEL}\n\n"
-                    f"Respuesta de Google:\n{response.text}"
-                )
+            # ----------------------------------------------------
+            # OTROS 4XX
+            # ----------------------------------------------------
 
             if 400 <= response.status_code < 500:
                 return (
@@ -294,10 +434,16 @@ Redacta la respuesta basándote exclusivamente en esta documentación.
                     f"{response.text}"
                 )
 
+            # ----------------------------------------------------
+            # 5XX
+            # ----------------------------------------------------
+
             ultimo_error = response.text
 
             if intento < MAX_REINTENTOS:
-                time.sleep(_espera_retry(response, intento))
+                time.sleep(
+                    _espera_retry(response, intento)
+                )
                 continue
 
             return (
